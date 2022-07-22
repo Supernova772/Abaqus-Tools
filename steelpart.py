@@ -24,12 +24,11 @@ from odbAccess import *
 import xlwt
 import time
 
-mdbname,dep,wid,ft,wt,insu,ic= getInputs(fields=(('Modelname:','ub356x171x57'),('Depth:','358'),('Width:','172.2'),('Flange thickness:','13'),('Web thickness:','8.1'),('Insulation thickness:','8'),('insulation conductivity','2e-5')),label='Enter parameters',dialogTitle='Steel section parameters')
+mdbname,dep,wid,ft,wt,insu= getInputs(fields=(('Modelname:','ub356x171x57'),('Depth:','358'),('Width:','172.2'),('Flange thickness:','13'),('Web thickness:','8.1'),('Insulation thickness:','8')),label='Enter parameters',dialogTitle='Steel section parameters')
 dep=float(dep)
 wid=float(wid)
 ft=float(ft)
 wt=float(wt)
-ic=float(ic)
 insu=float(insu)
 mdb.Model(name=mdbname, absoluteZero=-273.15, stefanBoltzmann=5.67e-14, 
     modelType=STANDARD_EXPLICIT)
