@@ -23,12 +23,17 @@ import numpy as np
 from odbAccess import *
 import xlwt
 import time
+import math
+import xlwings as xw
+import threading
 
-mdbname,dep,wid,ft,wt,insu= getInputs(fields=(('Modelname:','ub356x171x57'),('Depth:','358'),('Width:','172.2'),('Flange thickness:','13'),('Web thickness:','8.1'),('Insulation thickness:','8')),label='Enter parameters',dialogTitle='Steel section parameters')
+
+mdbname,dep,wid,ft,wt,insu,ic= getInputs(fields=(('Modelname:','ub356x171x57'),('Depth:','358'),('Width:','172.2'),('Flange thickness:','13'),('Web thickness:','8.1'),('Insulation thickness:','8'),('insulation conductivity','2e-5')),label='Enter parameters',dialogTitle='Steel section parameters')
 dep=float(dep)
 wid=float(wid)
 ft=float(ft)
 wt=float(wt)
+ic=float(ic)
 insu=float(insu)
 mdb.Model(name=mdbname, absoluteZero=-273.15, stefanBoltzmann=5.67e-14, 
     modelType=STANDARD_EXPLICIT)
@@ -194,6 +199,25 @@ mdb.models[mdbname].HomogeneousSolidSection(name='Steel',
     material='Steel', thickness=None)
 mdb.models[mdbname].HomogeneousSolidSection(name='Fire resistance', 
     material='Fire resistance material', thickness=None)
+#Section assignment
+p = mdb.models[mdbname].parts['steel']
+f = p.faces
+faces = f.getByBoundingBox()
+region = p.Set(faces=faces, name='Face-1')
+p.SectionAssignment(region=region, sectionName='Steel', offset=0.0, 
+    offsetType=MIDDLE_SURFACE, offsetField='', 
+    thicknessAssignment=FROM_SECTION)
+
+p = mdb.models[mdbname].parts['Fire resistance']
+f = p.faces
+faces = f.getByBoundingBox()
+region = p.Set(faces=faces, name='Face-2')
+p.SectionAssignment(region=region, sectionName='Fire resistance', offset=0.0, 
+    offsetType=MIDDLE_SURFACE, offsetField='', 
+    thicknessAssignment=FROM_SECTION)
+
+
+
 a = mdb.models[mdbname].rootAssembly
 a.DatumCsysByDefault(CARTESIAN)
 p = mdb.models[mdbname].parts['Fire resistance']
@@ -201,8 +225,8 @@ a.Instance(name='Fire resistance-1', part=p, dependent=OFF)
 p = mdb.models[mdbname].parts['steel']
 a.Instance(name='steel-1', part=p, dependent=OFF)
 mdb.models[mdbname].HeatTransferStep(name='Step-1', previous='Initial', 
-    timePeriod=7200.0, maxNumInc=700, initialInc=0.1, minInc=0.001, 
-    maxInc=50.0, deltmx=20.0)
+    timePeriod=7200.0, maxNumInc=5000, initialInc=0.01, minInc=1e-16, 
+    maxInc=50.0, deltmx=10.0)
 mdb.models[mdbname].FilmConditionProp(name='IntProp-1', 
     temperatureDependency=OFF, dependencies=0, property=((2.5e-05, ), ))
 
@@ -253,11 +277,18 @@ mdb.models[mdbname].TabularAmplitude(name='Amp-1', timeSpan=STEP,
 
 a = mdb.models[mdbname].rootAssembly
 s1 = a.instances['Fire resistance-1'].edges
-side1Edges1 = s1.getSequenceFromMask(mask=('[#3ffe ]', ), )
+
 s2 = a.instances['steel-1'].edges
-side1Edges2 = s2.getSequenceFromMask(mask=('[#800 ]', ), )
+My_edges1=s1.getByBoundingBox(yMin=dep/2-1)
+My_edges2=s1.getByBoundingBox(yMax=-(dep/2+insu-1))
+My_edges3=s1.getByBoundingBox(xMax=-(wid/2+insu-1))
+My_edges4=s1.getByBoundingBox(xMin=(wid/2+insu-1))
+My_edges5=s1.getByBoundingBox(yMax=(dep/2-ft-insu),yMin=-(dep/2-insu-ft),xMax=-(wt/2+insu-1))
+My_edges6=s1.getByBoundingBox(yMax=(dep/2-insu-ft),yMin=-(dep/2-insu-ft),xMin=(wt/2+insu-1))
+side1Edges1 = s2.getByBoundingBox(yMin=dep/2-1)
+side1Edges2 = My_edges1+My_edges2+My_edges3+My_edges4+My_edges5+My_edges6
 a.Surface(side1Edges=side1Edges1+side1Edges2, name='Surf-3')
-region=a.Surface(side1Edges=side1Edges1, name='Surf-3')
+region=a.Surface(side1Edges=side1Edges1+side1Edges2, name='Surf-3')
 mdb.models[mdbname].FilmCondition(name='Int-1', createStepName='Step-1', surface=region, definition=PROPERTY_REF, interactionProperty='IntProp-1', 
     sinkTemperature=1.0, sinkAmplitude='Amp-1', sinkDistributionType=UNIFORM, sinkFieldName='')
 mdb.models[mdbname].interactions['Int-1'].setValues(
@@ -267,6 +298,8 @@ mdb.models[mdbname].RadiationToAmbient(name='Int-2',
     createStepName='Step-1', surface=region, radiationType=AMBIENT, 
     distributionType=UNIFORM, field='', emissivity=0.3, ambientTemperature=1.0, 
     ambientTemperatureAmp='Amp-1')
+mdb.models[mdbname].fieldOutputRequests['F-Output-1'].setValues(
+    variables=('NT', 'TEMP', 'HFL', 'HFLA', 'RFL'))
 mdb.models[mdbname].HistoryOutputRequest(name='H-Output-1', 
     createStepName='Step-1', variables=('HFLA', 'HTL', 'HTLA', 'RADFL', 
     'RADFLA', 'RADTL'))
@@ -389,9 +422,23 @@ f=pickedface1+pickedface2
 session.viewports['Viewport: 1'].view.setValues(nearPlane=543.272, 
     farPlane=1090.99, width=745.248, height=329.673, cameraPosition=(198.428, 
     66.7408, 817.13), cameraTarget=(198.428, 66.7408, 0))
-
-
-    
+e=a.instances['steel-1'].edges
+My_edges2=e.getByBoundingBox(yMax=-(dep/2-1))
+My_edges3=e.getByBoundingBox(xMax=-(wid/2-1))
+My_edges4=e.getByBoundingBox(xMin=(wid/2-1))
+My_edges5=e.getByBoundingBox(yMax=(dep/2-ft),yMin=-(dep/2-ft),xMax=-(wt/2-1))
+My_edges6=e.getByBoundingBox(yMax=(dep/2-ft),yMin=-(dep/2-ft),xMin=(wt/2-1))
+My_edges=My_edges2+My_edges3+My_edges4+My_edges5+My_edges6
+myRegion1=regionToolset.Region(edges=My_edges)
+e=a.instances['Fire resistance-1'].edges
+My_edges1=e.getByBoundingBox(yMin=-(dep/2-ft-1),yMax=(dep/2-ft-1),xMax=(wt/2+1),xMin=-(wt/2+1))
+My_edges2=e.getByBoundingBox(yMin=(dep/2-ft-1),xMax=(wid/2+1),xMin=-(wid/2+1))
+My_edges3=e.getByBoundingBox(yMax=-(dep/2-ft-1),yMin=-(dep/2+1),xMax=(wid/2+1),xMin=-(wid/2+1))
+My_edges=My_edges1+My_edges2+My_edges3
+myRegion2=regionToolset.Region(edges=My_edges)  
+def Tie(mdbname,Tie_name,m_region,s_region):
+    mdb.models[mdbname].Tie(name=Tie_name,master=m_region,slave=s_region,positionTolerance=1e-1)
+Tie(mdbname,'Tie-1',myRegion2,myRegion1)    
 #datums=d1.keys()
 #for i in datums:
    # a.PartitionFaceByDatumPlane(faces=pickedface1,datumPlane=d1[9])
@@ -407,9 +454,8 @@ session.viewports['Viewport: 1'].view.setValues(nearPlane=502.108,
 a = mdb.models[mdbname].rootAssembly
 My_instance1=a.instances['Fire resistance-1']
 My_instance2=a.instances['steel-1']
-#My_instance=My_instance1+My_instance2
-instances=(My_instance1,My_instance2)
-a.seedPartInstance(regions=My_instances,size=2)
+instances1=(My_instance1,My_instance2)
+a.seedPartInstance(regions=instances1,size=1)
 v1 = a.instances['steel-1'].vertices
 v11 = a.instances['Fire resistance-1'].vertices
 v=v1+v11
@@ -425,13 +471,52 @@ My_regions=(My_region1,)
 def set_Mesh_Control(My_region):
     a.setMeshControls(regions=My_region,elemShape=QUAD_DOMINATED,technique=STRUCTURED)
 set_Mesh_Control(pickedFaces)
-elemType1 = mesh.ElemType(elemCode=DCC2D4, elemLibrary=STANDARD)
-elemType2 = mesh.ElemType(elemCode=DC2D3, elemLibrary=STANDARD)
-pickedRegions =((f1+f2), )
-a.setElementType(regions=pickedRegions, elemTypes=(elemType1, elemType2))
-def generate_Mesh(My_instances):
+def generate_Mesh(mdbname):
+    a = mdb.models[mdbname].rootAssembly
+    My_instance1=a.instances['Fire resistance-1']
+    My_instance2=a.instances['steel-1']
+    My_instances=(My_instance1,My_instance2)
     a.generateMesh(regions=My_instances)
-generate_Mesh(instances)
+generate_Mesh(mdbname)
+
+My_instance1=a.instances['Fire resistance-1']
+My_instance2=a.instances['steel-1']
+e1=My_instance1.elements
+e2=My_instance2.elements
+My_meshes=(e1,e2)
+Eset=a.Set(name='elset',elements=My_meshes)
+
+
+elemType1 = mesh.ElemType(elemCode=DC2D4, elemLibrary=STANDARD)
+elemType2 = mesh.ElemType(elemCode=DC2D3, elemLibrary=STANDARD)
+f=(f1,f2)
+def setElementType(mdbname,Eset,elemType1,elemType2):
+    a=mdb.models[mdbname].rootAssembly
+    a.setElementType(regions=Eset, elemTypes=(elemType1,elemType2))
+setElementType(mdbname,f,elemType1,elemType2)
+
+f1 = a.instances['Fire resistance-1'].faces
+faces1 = f1.getByBoundingBox()
+e1 = a.instances['Fire resistance-1'].edges
+edges1 = e1.getByBoundingBox()
+v1 = a.instances['Fire resistance-1'].vertices
+verts1 = v1.getByBoundingBox()
+f2 = a.instances['steel-1'].faces
+faces2 = f2.getByBoundingBox()
+e2 = a.instances['steel-1'].edges
+edges2 = e2.getByBoundingBox()
+v2 = a.instances['steel-1'].vertices
+verts2 = v2.getByBoundingBox()
+region = a.Set(vertices=verts1+verts2, edges=edges1+edges2, faces=faces1+faces2, name='Temp')
+mdb.models[mdbname].Temperature(name='Predefined Field-1', 
+    createStepName='Initial', region=region, distributionType=UNIFORM, 
+    crossSectionDistribution=CONSTANT_THROUGH_THICKNESS, magnitudes=(20.0, ))
+
+
+
+#My_region=regionToolset.Region(elements=My_meshes)
+
+
 def Define_Upperflange_nodeSet (mdbname,set_name,y_Min):
     n=mdb.models[mdbname].rootAssembly.instances['steel-1'].nodes
     My_nodes1=n.getByBoundingBox(yMin=y_Min)
@@ -453,6 +538,26 @@ y_Max=dep/2-ft-1
 Define_Web_nodeSet (mdbname,'Web',y_Min,y_Max)
 y_Max=-(dep/2-ft-1)
 Define_Lowerflange_nodeSet (mdbname,'Lowerflange',y_Max)
+
+y_Min1=dep/2-ft-0.5
+y_Max1=dep/2-ft+0.5
+y_Min2=-(dep/2-ft+0.5)
+y_Max2=-(dep/2-ft-0.5)
+
+#Get_Nodes_by_BoundingBox
+def Get_Nodes_by_BoundingBox(My_mdb,My_instance,y_Min,y_Max): 
+	n=mdb.models[My_mdb].rootAssembly.instances[My_instance].nodes
+	My_nodes=n.getByBoundingBox(yMin=y_Min,yMax=y_Max)
+	return My_nodes
+#Establish Node set
+def establish_Set(mdbname,setname,My_nodes):
+	My_set=mdb.models[mdbname].rootAssembly.Set(name=setname,nodes=My_nodes)
+	return My_set
+
+My_nodes=Get_Nodes_by_BoundingBox(mdbname,'steel-1',y_Min1,y_Max1)
+establish_Set(mdbname,'topjunction',My_nodes)
+My_nodes=Get_Nodes_by_BoundingBox(mdbname,'steel-1',y_Min2,y_Max2)
+establish_Set(mdbname,'bottomjunction',My_nodes)
 
 
 
