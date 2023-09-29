@@ -17,23 +17,7 @@ import time
 import os
 import os.path as op
 import csv
-#wbname,SH,ns1name,ns2name,ns3name= getInputs(
-  #fields=(('wbname:', 'Temperature1'),('Heading:', 'Temperature'),('Nodeset 1:', 'LOWERFLANGE'),('Nodeset 2:','upper flange'),('Nodeset 3:','WEB')),
-  #label='Enter information',
-  #dialogTitle='Average temperature of node sets')
 
-#modelling
-         
-#Run model
-#dep=358
-#wid=172.2
-#ft=13
-#wt=8.1
-#insu=8
-#ic=0.02
-#T_time=3600
-#Limit_T=400
-#T_allowance=5
 
 def Modelling(dep,wid,ft,wt,ic,insu,ms):
     dep1=str(dep)
