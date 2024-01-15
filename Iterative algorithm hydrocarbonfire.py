@@ -553,7 +553,7 @@ def iter_algor(insu,Max_temp,Limit_T,rev,coeff):
     insu=round(insu,2)
     print(insu,coeff)
     if insu <= 0:
-        insu=0.1
+        insu=0.01
     return insu,coeff
 class Getoutofloop(Exception):
     pass
