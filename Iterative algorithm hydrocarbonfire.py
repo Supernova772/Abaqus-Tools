@@ -642,7 +642,7 @@ def liter_part(dep,wid,ft,wt,insu,ic,T_time,Limit_T,T_allowance,ms):
     print("Modification finished")
     return Max_temp
 os.chdir(r"D:\Temp")
-dep,wid,ft,wt,insu,ic,T_time,Limit_T,T_allowance,ms= getInputs(fields=(('Depth:','358'),('Width:','172.2'),('Flange thickness:','13'),('Web thickness:','8.1'),('Insulation thickness:','8'),('insulation conductivity','0.02'),('Targeting Time','3600'),('Targeting Temperature','400'),('Temp. allowance','5'),('meshsize','2')),label='Enter parameters',dialogTitle='Steel section parameters')
+dep,wid,ft,wt,insu,ic,T_time,Limit_T,T_allowance,ms= getInputs(fields=(('Depth:','358'),('Width:','172.2'),('Flange thickness:','13'),('Web thickness:','8.1'),('Insulation thickness:','8'),('Insulation conductivity','0.02'),('Targeting Time','3600'),('Targeting Temperature','400'),('Temp. allowance','5'),('Meshsize','2')),label='Enter parameters',dialogTitle='Steel section parameters')
 T_time=float(T_time)
 Limit_T=float(Limit_T)
 T_allowance=float(T_allowance)
